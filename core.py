@@ -224,7 +224,7 @@ if __name__ == '__main__':
         date=DATE,
         min_rank=6,
         max_rank=6,
-    ), filename='graphs/altitude_class_low')
+    ), filename=f'graphs/{DATE}_altitude_class_low')
 
     plot_wrap(target_altitudes(
         targets=classification,
@@ -232,7 +232,7 @@ if __name__ == '__main__':
         date=DATE,
         min_rank=2,
         max_rank=4,
-    ), filename='graphs/altitude_class_high')
+    ), filename=f'graphs/{DATE}_altitude_class_high')
 
     plot_wrap(target_altitudes(
         targets=followup,
@@ -240,10 +240,10 @@ if __name__ == '__main__':
         date=DATE,
         min_rank=1,
         max_rank=5
-    ), filename='graphs/altitude_follow')
+    ), filename=f'graphs/{DATE}_altitude_follow')
 
     plot_wrap(target_altitudes(
         targets=all_transients,
         site=la_silla,
         date=DATE
-    ), filename='graphs/altitude_all')
+    ), filename=f'graphs/{DATE}_altitude_all')
