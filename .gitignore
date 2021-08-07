@@ -226,3 +226,6 @@ fabric.properties
 
 # mac folder options
 .DS_Store
+
+# login file
+login.json
