@@ -41,12 +41,6 @@ REV_RANK_INDEX = {V: K for K, V in RANK_INDEX.items()}
 DATE = str(Time.now().datetime.date())
 
 
-# list of transient names to ignore in planning e.g. 'AT2021uuh'
-IGNORE_LIST = [
-
-]
-
-
 def plot_wrap(fig, *args, show=False, filename=None, transparent=False):
     if transparent:
         fig.patch.set_alpha(0)
@@ -128,7 +122,7 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     ax.axvspan(sunrise.datetime, end_time.datetime, ymin=0, ymax=1, color='grey', alpha=0.4)
 
     # airmass axis
-    airmass_ticks = np.arange(1, 3.1, 0.1)
+    airmass_ticks = np.concatenate([np.arange(1, 2.1, 0.1), np.arange(2.2, 3.2, 0.2)])
     altitude_ticks = 90 - np.degrees(np.arccos(1 / airmass_ticks))
     air_ax = fig.get_axes()[-1]
     air_ax.set_yticks(altitude_ticks)
@@ -153,8 +147,18 @@ if __name__ == '__main__':
                 'login': 'your_username',
                 'password': 'your_password'
             }, f, indent=4)
-        print('No login file detected, please enter your details into the new placeholder file.\n')
+        print('No login file detected, please enter your details into the new placeholder file.')
         payload = {}
+
+    # import ignore list
+    if os.path.exists('ignore_list.txt'):
+        ignore_list = list(np.genfromtxt('ignore_list.txt', dtype=str).flatten())
+    else:
+        np.savetxt(
+            'ignore_list.txt', np.array(['# list of targets to ignore in planning e.g. AT2021uuh AT2018cow']), fmt='%s'
+        )
+        print('Generated placeholder ignore list.')
+        ignore_list = []
 
     # acquire transients
     with requests.Session() as s:
@@ -175,10 +179,10 @@ if __name__ == '__main__':
 
     # remove each transient without priority or on the ignore list
     classification = [o for o in classification
-                      if o['priority'] in RANK_INDEX.keys() and o['name'] not in IGNORE_LIST
+                      if o['priority'] in RANK_INDEX.keys() and o['name'] not in ignore_list
                       and o['classification date'] is None]
     followup = [o for o in followup
-                if o['priority'] in RANK_INDEX.keys() and o['name'] not in IGNORE_LIST]
+                if o['priority'] in RANK_INDEX.keys() and o['name'] not in ignore_list]
 
     # label each transient with the observation type and provide a rank and nickname
     for obj in classification:
@@ -197,6 +201,10 @@ if __name__ == '__main__':
     all_transients = sorted(all_transients, key=lambda x: x['rank'])
     classification = sorted(classification, key=lambda x: x['rank'])
     followup = sorted(followup, key=lambda x: x['rank'])
+
+    # show the ordered targets
+    for obj in all_transients:
+        print(obj['name'], obj['priority'])
 
     # target lists for staralt
     staralt_class = np.array([
