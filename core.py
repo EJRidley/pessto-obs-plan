@@ -130,7 +130,7 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     air_ax.set_yticklabels(np.array([f'{t:.1f}' for t in airmass_ticks]))
 
     # plot gubbins
-    ax.legend(fontsize='small', ncol=7, loc='lower center')
+    ax.legend(fontsize='small', ncol=7, loc='lower center', frameon=True)
     ax.grid(linestyle='--')
     ax.set(title=f'Highest priority = {REV_RANK_INDEX[min_rank]}    Lowest priority = {REV_RANK_INDEX[max_rank]}')
     plt.tight_layout(pad=0.5)
