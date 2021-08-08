@@ -17,6 +17,7 @@ warnings.filterwarnings('ignore', 'linestyle')
 
 
 plt.rcParams['figure.figsize'] = 12, 7
+plt.rcParams['font.size'] = 10
 plt.rcParams['axes.prop_cycle'] = plt.cycler(
     color=['#583ea3', '#ff7f00', '#4daf4a', '#f781bf', '#164608', '#377eb8', '#999999', '#ff1a1c']
 )  # modified from https://gist.github.com/thriveth/8560036
@@ -132,6 +133,7 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     ax.legend(fontsize='small', ncol=7, loc='lower center')
     ax.grid(linestyle='--')
     ax.set(title=f'Highest priority = {REV_RANK_INDEX[min_rank]}    Lowest priority = {REV_RANK_INDEX[max_rank]}')
+    plt.tight_layout(pad=0.5)
 
     return fig
 
