@@ -1,8 +1,7 @@
-# pessto-obs-plan
-PESSTO Observation Planning
-
-Dependencies: numpy, matplotlib, requests, astropy, astroplan
+# ePESSTO+ Observation Planning
 
 Useful code for planning ePESSTO+ observations.
 
-Requires ePESSTO+ Marshall login details in login.json (generated on first run)
+**Dependencies: numpy, matplotlib, requests, astropy, astroplan**
+
+**Requires ePESSTO+ Marshall login details in login.json (generated on first run)**
