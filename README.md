@@ -8,7 +8,7 @@ Useful code for planning ePESSTO+ observations.
 
 ### On First Run
 Core.py will generate:
-*login.json
-*ignore_list.txt
-*graphs/
-*outputs/
+* login.json
+* ignore_list.txt
+* graphs/
+* outputs/
