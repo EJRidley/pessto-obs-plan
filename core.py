@@ -60,6 +60,14 @@ def plot_wrap(fig, *args, show=False, filename=None, transparent=False):
     return args
 
 
+def make_directory(path):
+    if not os.path.exists(path):
+        try:
+            os.mkdir(path)
+        except OSError:
+            print(f'Failed to create directory {path}.')
+
+
 def strip_name(name):
     if name[:2] == 'AT':
         name = name[4:]
@@ -161,6 +169,10 @@ if __name__ == '__main__':
         )
         print('Generated placeholder ignore list.')
         ignore_list = []
+
+    # directories
+    make_directory('graphs/')
+    make_directory('outputs/')
 
     # acquire transients
     with requests.Session() as s:
