@@ -210,12 +210,12 @@ if __name__ == '__main__':
 
     # target lists for staralt
     staralt_class = np.array([
-        np.array([o['nickname'], o['ra (sex)'], o['dec (sex)']])
+        np.array([o['name'], o['ra (sex)'], o['dec (sex)']])
         for o in classification if o['priority'] != 'LOW'
     ])
 
     staralt_follow = np.array([
-        np.array([o['nickname'], o['ra (sex)'], o['dec (sex)']])
+        np.array([o['name'], o['ra (sex)'], o['dec (sex)']])
         for o in followup
     ])
 
