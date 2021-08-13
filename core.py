@@ -122,6 +122,7 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     # get the moon
     moon = get_moon(observe_time)
     illum = moon_illumination(evening_twilight) * 100
+    moon_altitude = site.altaz(observe_time, moon).alt.deg
 
     # plotting
     linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1, 1, 1))] * (int(len(targets)/4)+1)
@@ -145,11 +146,16 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
                           style_kwargs={'linestyle': linestyle, 'linewidth': 1},  # ((7 - obj['rank'])/2) + 0.5},
                           max_altitude=91, min_altitude=15)
             # display moon distance
-            ax.text(time_max_alt.plot_date, max_alt, f'{angle_at_max:.0f}$^o$',
-                    ha='center', va='bottom', fontsize='small')
+            text_obj = ax.text(time_max_alt.plot_date, max_alt, f'{angle_at_max:.0f}$^o$',
+                               ha='center', va='bottom', fontsize='small', zorder=10)
+            text_obj.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
+                               'boxstyle': 'round, pad=0.0, rounding_size=0.3'})
 
     # lowest viable seeing
     ax.axhline(y=30, color='k', linestyle='--')
+
+    # plot moon track
+    ax.plot(observe_time.plot_date, moon_altitude, color='k', linestyle='--', label='Moon')
 
     # shading
     ax.axvspan(start_time.datetime, sunset.datetime, ymin=0, ymax=1, color='grey', alpha=0.4)
