@@ -8,7 +8,8 @@ from matplotlib import pyplot as plt, gridspec as gspec
 from astropy.time import Time, TimeDelta
 from astroplan import FixedTarget, Observer
 from astroplan.plots import plot_altitude
-from astropy.coordinates import SkyCoord
+from astroplan.moon import moon_illumination
+from astropy.coordinates import SkyCoord, get_moon
 import astropy.units as u
 
 
@@ -40,6 +41,18 @@ REV_RANK_INDEX = {V: K for K, V in RANK_INDEX.items()}
 
 # current date, if desired replace DATE with date for planning e.g. '2021-08-07'
 DATE = str(Time.now().datetime.date())
+
+
+# ePESSTO+ observation blocks
+CLASSIFICATION_OBS = [
+    {'mag_constraint': lambda m: m < 13, 'exp_time_s': 40, 'exec_time_s': 433, 'description': '< 13'},
+    {'mag_constraint': lambda m: 13 <= m < 14.5, 'exp_time_s': 120, 'exec_time_s': 517, 'description': '13-14.5'},
+    {'mag_constraint': lambda m: 14.5 <= m < 16, 'exp_time_s': 180, 'exec_time_s': 581, 'description': '14.5-16'},
+    {'mag_constraint': lambda m: 16 <= m < 17.5, 'exp_time_s': 300, 'exec_time_s': 711, 'description': '16-17.5'},
+    {'mag_constraint': lambda m: 17.5 <= m < 18.5, 'exp_time_s': 600, 'exec_time_s': 1031, 'description': '17.5-18.5'},
+    {'mag_constraint': lambda m: 18.5 <= m < 19.5, 'exp_time_s': 900, 'exec_time_s': 1351, 'description': '18.5-19.5'},
+    {'mag_constraint': lambda m: 19.5 <= m, 'exp_time_s': 1500, 'exec_time_s': 1971, 'description': '> 19.5'}
+]
 
 
 def plot_wrap(fig, *args, show=False, filename=None, transparent=False):
@@ -104,7 +117,11 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     start_time = sunset - hour
     end_time = sunrise + hour
     delta_t = end_time - start_time
-    observe_time = start_time + delta_t * np.linspace(0, 1, 75)
+    observe_time = start_time + delta_t * np.linspace(0, 1, 100)
+
+    # get the moon
+    moon = get_moon(observe_time)
+    illum = moon_illumination(evening_twilight) * 100
 
     # plotting
     linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1, 1, 1))] * (int(len(targets)/4)+1)
@@ -112,14 +129,100 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     for obj in targets:
         if min_rank <= obj['rank'] <= max_rank:
             n += 1
-            linestyle = linestyles[int(n/n_colors)]
-            target = FixedTarget(SkyCoord(ra=float(obj['ra'])*u.deg, dec=float(obj['dec'])*u.deg), name=obj['name'])
+            linestyle = linestyles[int((n-1)/n_colors)]
+            priority = REV_RANK_INDEX[obj['rank']]
+            target_coords = SkyCoord(ra=float(obj['ra'])*u.deg, dec=float(obj['dec'])*u.deg)
+            target = FixedTarget(target_coords, name=f'{obj["name"]}({priority[0]})')
 
-            # altitude = site.altaz(observe_time, target).alt
+            altitude = site.altaz(observe_time, target).alt.deg
+            max_alt = np.max(altitude)
+            time_max_alt = observe_time[np.argmax(altitude)]
+
+            moon_angle = moon.separation(target_coords)
+            angle_at_max = moon_angle[np.argmax(altitude)].deg
 
             plot_altitude(target, site, observe_time, airmass_yaxis=True, ax=ax,
                           style_kwargs={'linestyle': linestyle, 'linewidth': 1},  # ((7 - obj['rank'])/2) + 0.5},
                           max_altitude=91, min_altitude=15)
+            # display moon distance
+            ax.text(time_max_alt.plot_date, max_alt, f'{angle_at_max:.0f}$^o$',
+                    ha='center', va='bottom', fontsize='small')
+
+    # lowest viable seeing
+    ax.axhline(y=30, color='k', linestyle='--')
+
+    # shading
+    ax.axvspan(start_time.datetime, sunset.datetime, ymin=0, ymax=1, color='grey', alpha=0.4)
+    ax.axvspan(sunset.datetime, evening_twilight.datetime, ymin=0, ymax=1, color='grey', alpha=0.2)
+    ax.axvspan(morning_twilight.datetime, sunrise.datetime, ymin=0, ymax=1, color='grey', alpha=0.2)
+    ax.axvspan(sunrise.datetime, end_time.datetime, ymin=0, ymax=1, color='grey', alpha=0.4)
+
+    # airmass axis
+    airmass_ticks = np.concatenate([np.arange(1, 2.1, 0.1), np.arange(2.2, 3.2, 0.2)])
+    altitude_ticks = 90 - np.degrees(np.arccos(1 / airmass_ticks))
+    air_ax = fig.get_axes()[-1]
+    air_ax.set_yticks(altitude_ticks)
+    air_ax.set_yticklabels(np.array([f'{t:.1f}' for t in airmass_ticks]))
+
+    # plot gubbins
+    ax.legend(fontsize='small', ncol=7, loc='lower center', frameon=True)
+    ax.grid(linestyle='--')
+    ax.set(title=f'Highest priority = {REV_RANK_INDEX[min_rank]}    Lowest priority = {REV_RANK_INDEX[max_rank]}  ' +
+                 f'  Moon Illumination = {illum:.0f}%')
+    plt.tight_layout(pad=0.5)
+
+    return fig
+
+
+def make_schedule(targets, site, date, min_rank=1, max_rank=6):
+    fig = plt.figure()
+    gs = gspec.GridSpec(1, 1)
+    ax = fig.add_subplot(gs[0, 0])
+
+    n_colors = sum([1 for d in plt.rcParams['axes.prop_cycle']])
+
+    # get timings
+    hour = TimeDelta(3600.0 * u.s)
+    sec = TimeDelta(1.0 * u.s)
+    sunset, sunrise, evening_twilight, morning_twilight = observation_timings(site, date)
+
+    # specify a time axis
+    start_time = sunset - hour
+    end_time = sunrise + hour
+    delta_t = end_time - start_time
+    observe_time = start_time + delta_t * np.linspace(0, 1, 75)
+
+    hi_res_time = evening_twilight + (morning_twilight - evening_twilight) * np.linspace(0, 1, 200)
+
+    # plotting
+    linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1, 1, 1))] * (int(len(targets)/4)+1)
+    n = 0
+    for obj in targets:
+        if min_rank <= obj['rank'] <= max_rank:
+            n += 1
+            linestyle = linestyles[int((n-1)/n_colors)]
+            priority = REV_RANK_INDEX[obj['rank']]
+            target = FixedTarget(SkyCoord(ra=float(obj['ra'])*u.deg, dec=float(obj['dec'])*u.deg))
+
+            altitude = site.altaz(hi_res_time, target).alt.degree
+            max_time = hi_res_time[np.argmax(altitude)]
+
+            plot_altitude(target, site, hi_res_time, airmass_yaxis=True, ax=ax,
+                          style_kwargs={'linestyle': ':', 'color': 'k', 'alpha': 0.5},
+                          max_altitude=91, min_altitude=15)
+
+            if 'ob' in obj.keys():
+                ob = obj['ob']
+                obs_mask = np.logical_and(max_time - ob['exec_time_s'] * sec <= hi_res_time,
+                                          hi_res_time <= max_time)
+                if obs_mask.any():
+                    ax.plot(hi_res_time[obs_mask].plot_date, altitude[obs_mask],
+                            color='w', linestyle='-', linewidth=4)
+                    ax.plot(hi_res_time[obs_mask].plot_date, altitude[obs_mask],
+                            label=f'{obj["name"]}({priority[0]})', linestyle=linestyle, linewidth=3)
+            else:
+                ax.plot(hi_res_time.plot_date, altitude,
+                        linestyle=linestyle, label=f'{obj["nickname"]}({priority[0]})')
 
     # lowest viable seeing
     ax.axhline(y=30, color='k', linestyle='--')
@@ -204,6 +307,11 @@ if __name__ == '__main__':
         obj['rank'] = RANK_INDEX[obj['priority']]
         obj['nickname'] = strip_name(obj['name'])
 
+        # choose an OB
+        ob_index = np.array([ob['mag_constraint'](float(obj['latest mag'])) for ob in CLASSIFICATION_OBS], dtype=bool)
+        this_ob = np.array(CLASSIFICATION_OBS)[ob_index][0]
+        obj['ob'] = this_ob
+
     for obj in followup:
         obj['obs_type'] = 'followup'
         obj['rank'] = RANK_INDEX[obj['priority']]
@@ -218,6 +326,9 @@ if __name__ == '__main__':
 
     # show the ordered targets
     for obj in all_transients:
+        ob = ''
+        if 'ob' in obj.keys():
+            ob = f'{obj["ob"]["description"]}  {obj["ob"]["exp_time_s"]}s'
         print(obj['name'], obj['priority'])
 
     # target lists for staralt
@@ -234,12 +345,17 @@ if __name__ == '__main__':
     np.savetxt('outputs/followup_list.txt', staralt_follow, fmt='%s')
     np.savetxt('outputs/classification_list.txt', staralt_class, fmt='%s')
 
-    # observability testing
-    # NOTHING HERE
-
-    # generate altitude plots
     la_silla = Observer.at_site('La Silla Observatory')
 
+    # observability testing
+    # plot_wrap(make_schedule(
+    #     targets=classification,
+    #     site=la_silla,
+    #     date=DATE,
+    #     max_rank=5
+    # ), filename='graphs/test_schedule', show=False)
+
+    # generate altitude plots
     plot_wrap(target_altitudes(
         targets=classification,
         site=la_silla,
