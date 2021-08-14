@@ -146,8 +146,13 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
                           style_kwargs={'linestyle': linestyle, 'linewidth': 1},  # ((7 - obj['rank'])/2) + 0.5},
                           max_altitude=91, min_altitude=15)
             # display moon distance
-            text_obj = ax.text(time_max_alt.plot_date, max_alt, f'{angle_at_max:.0f}$^o$',
+            text_obj = ax.text(time_max_alt.plot_date, max_alt, f'{angle_at_max:.0f}$^{{\\rm o}}$',
                                ha='center', va='bottom', fontsize='small', zorder=10)
+            text_obj.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
+                               'boxstyle': 'round, pad=0.0, rounding_size=0.3'})
+            # show latest mag
+            text_obj = ax.text(time_max_alt.plot_date, max_alt-1, f'{obj["latest mag"]:.1f}',
+                               ha='center', va='top', fontsize='small', zorder=10)
             text_obj.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
                                'boxstyle': 'round, pad=0.0, rounding_size=0.3'})
 
