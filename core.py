@@ -107,13 +107,13 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     gs = gspec.GridSpec(1, 1)
     ax = fig.add_subplot(gs[0, 0])
 
-    n_colors = sum([1 for d in plt.rcParams['axes.prop_cycle']])
+    n_colors = len(plt.rcParams['axes.prop_cycle'])
 
     # get timings
-    hour = TimeDelta(3600.0 * u.s)
     sunset, sunrise, evening_twilight, morning_twilight = observation_timings(site, date)
 
     # specify a time axis
+    hour = TimeDelta(3600.0 * u.s)
     start_time = sunset - hour
     end_time = sunrise + hour
     delta_t = end_time - start_time
@@ -132,28 +132,32 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
             n += 1
             linestyle = linestyles[int((n-1)/n_colors)]
             priority = REV_RANK_INDEX[obj['rank']]
+
             target_coords = SkyCoord(ra=float(obj['ra'])*u.deg, dec=float(obj['dec'])*u.deg)
             target = FixedTarget(target_coords, name=f'{obj["name"]}({priority[0]})')
 
+            # calculate target altitude
             altitude = site.altaz(observe_time, target).alt.deg
             max_alt = np.max(altitude)
             time_max_alt = observe_time[np.argmax(altitude)]
 
+            plot_altitude(target, site, observe_time, airmass_yaxis=True, ax=ax,
+                          style_kwargs={'linestyle': linestyle, 'linewidth': 1},
+                          max_altitude=91, min_altitude=15)
+
+            # display moon distance
             moon_angle = moon.separation(target_coords)
             angle_at_max = moon_angle[np.argmax(altitude)].deg
 
-            plot_altitude(target, site, observe_time, airmass_yaxis=True, ax=ax,
-                          style_kwargs={'linestyle': linestyle, 'linewidth': 1},  # ((7 - obj['rank'])/2) + 0.5},
-                          max_altitude=91, min_altitude=15)
-            # display moon distance
-            text_obj = ax.text(time_max_alt.plot_date, max_alt, f'{angle_at_max:.0f}$^{{\\rm o}}$',
-                               ha='center', va='bottom', fontsize='small', zorder=10)
-            text_obj.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
-                               'boxstyle': 'round, pad=0.0, rounding_size=0.3'})
+            moon_text = ax.text(time_max_alt.plot_date, max_alt+.5, f'{angle_at_max:.0f}$^{{\\rm o}}$',
+                                ha='center', va='bottom', fontsize='small', zorder=10)
+            moon_text.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
+                                'boxstyle': 'round, pad=0.0, rounding_size=0.3'})
+
             # show latest mag
-            text_obj = ax.text(time_max_alt.plot_date, max_alt-1, f'{obj["latest mag"]:.1f}',
+            mag_text = ax.text(time_max_alt.plot_date, max_alt-1, f'{obj["latest mag"]:.1f}',
                                ha='center', va='top', fontsize='small', zorder=10)
-            text_obj.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
+            mag_text.set_bbox({'facecolor': 'white', 'alpha': 0.75, 'linewidth': 0,
                                'boxstyle': 'round, pad=0.0, rounding_size=0.3'})
 
     # lowest viable seeing
@@ -185,82 +189,7 @@ def target_altitudes(targets, site, date, min_rank=1, max_rank=6):
     return fig
 
 
-def make_schedule(targets, site, date, min_rank=1, max_rank=6):
-    fig = plt.figure()
-    gs = gspec.GridSpec(1, 1)
-    ax = fig.add_subplot(gs[0, 0])
-
-    n_colors = sum([1 for d in plt.rcParams['axes.prop_cycle']])
-
-    # get timings
-    hour = TimeDelta(3600.0 * u.s)
-    sec = TimeDelta(1.0 * u.s)
-    sunset, sunrise, evening_twilight, morning_twilight = observation_timings(site, date)
-
-    # specify a time axis
-    start_time = sunset - hour
-    end_time = sunrise + hour
-    delta_t = end_time - start_time
-    observe_time = start_time + delta_t * np.linspace(0, 1, 75)
-
-    hi_res_time = evening_twilight + (morning_twilight - evening_twilight) * np.linspace(0, 1, 200)
-
-    # plotting
-    linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1, 1, 1))] * (int(len(targets)/4)+1)
-    n = 0
-    for obj in targets:
-        if min_rank <= obj['rank'] <= max_rank:
-            n += 1
-            linestyle = linestyles[int((n-1)/n_colors)]
-            priority = REV_RANK_INDEX[obj['rank']]
-            target = FixedTarget(SkyCoord(ra=float(obj['ra'])*u.deg, dec=float(obj['dec'])*u.deg))
-
-            altitude = site.altaz(hi_res_time, target).alt.degree
-            max_time = hi_res_time[np.argmax(altitude)]
-
-            plot_altitude(target, site, hi_res_time, airmass_yaxis=True, ax=ax,
-                          style_kwargs={'linestyle': ':', 'color': 'k', 'alpha': 0.5},
-                          max_altitude=91, min_altitude=15)
-
-            if 'ob' in obj.keys():
-                ob = obj['ob']
-                obs_mask = np.logical_and(max_time - ob['exec_time_s'] * sec <= hi_res_time,
-                                          hi_res_time <= max_time)
-                if obs_mask.any():
-                    ax.plot(hi_res_time[obs_mask].plot_date, altitude[obs_mask],
-                            color='w', linestyle='-', linewidth=4)
-                    ax.plot(hi_res_time[obs_mask].plot_date, altitude[obs_mask],
-                            label=f'{obj["name"]}({priority[0]})', linestyle=linestyle, linewidth=3)
-            else:
-                ax.plot(hi_res_time.plot_date, altitude,
-                        linestyle=linestyle, label=f'{obj["nickname"]}({priority[0]})')
-
-    # lowest viable seeing
-    ax.axhline(y=30, color='k', linestyle='--')
-
-    # shading
-    ax.axvspan(start_time.datetime, sunset.datetime, ymin=0, ymax=1, color='grey', alpha=0.4)
-    ax.axvspan(sunset.datetime, evening_twilight.datetime, ymin=0, ymax=1, color='grey', alpha=0.2)
-    ax.axvspan(morning_twilight.datetime, sunrise.datetime, ymin=0, ymax=1, color='grey', alpha=0.2)
-    ax.axvspan(sunrise.datetime, end_time.datetime, ymin=0, ymax=1, color='grey', alpha=0.4)
-
-    # airmass axis
-    airmass_ticks = np.concatenate([np.arange(1, 2.1, 0.1), np.arange(2.2, 3.2, 0.2)])
-    altitude_ticks = 90 - np.degrees(np.arccos(1 / airmass_ticks))
-    air_ax = fig.get_axes()[-1]
-    air_ax.set_yticks(altitude_ticks)
-    air_ax.set_yticklabels(np.array([f'{t:.1f}' for t in airmass_ticks]))
-
-    # plot gubbins
-    ax.legend(fontsize='small', ncol=7, loc='lower center', frameon=True)
-    ax.grid(linestyle='--')
-    ax.set(title=f'Highest priority = {REV_RANK_INDEX[min_rank]}    Lowest priority = {REV_RANK_INDEX[max_rank]}')
-    plt.tight_layout(pad=0.5)
-
-    return fig
-
-
-if __name__ == '__main__':
+def main():
     # handle login
     if os.path.exists('login.json'):
         with open('login.json', 'r') as f:
@@ -300,33 +229,34 @@ if __name__ == '__main__':
             followup = response.json()
         except json.decoder.JSONDecodeError:
             print('Failed to download targets from marshall! Check your login details.')
-            classification = []
-            followup = []
-
-    all_transients = []
+            return None
 
     # remove each transient without priority or on the ignore list
-    classification = [o for o in classification
-                      if o['priority'] in RANK_INDEX.keys() and o['name'] not in ignore_list
-                      and o['classification date'] is None]
-    followup = [o for o in followup
-                if o['priority'] in RANK_INDEX.keys() and o['name'] not in ignore_list]
+    classification = [target for target in classification
+                      if target['priority'] in RANK_INDEX.keys()
+                      and target['name'] not in ignore_list
+                      and target['classification date'] is None]
+
+    followup = [target for target in followup
+                if target['priority'] in RANK_INDEX.keys()
+                and target['name'] not in ignore_list]
 
     # label each transient with the observation type and provide a rank and nickname
-    for obj in classification:
-        obj['obs_type'] = 'classification'
-        obj['rank'] = RANK_INDEX[obj['priority']]
-        obj['nickname'] = strip_name(obj['name'])
+    for target in classification:
+        target['obs_type'] = 'classification'
+        target['rank'] = RANK_INDEX[target['priority']]
+        target['nickname'] = strip_name(target['name'])
 
         # choose an OB
-        ob_index = np.array([ob['mag_constraint'](float(obj['latest mag'])) for ob in CLASSIFICATION_OBS], dtype=bool)
+        ob_index = np.array([ob['mag_constraint'](float(target['latest mag']))
+                             for ob in CLASSIFICATION_OBS], dtype=bool)
         this_ob = np.array(CLASSIFICATION_OBS)[ob_index][0]
-        obj['ob'] = this_ob
+        target['ob'] = this_ob
 
-    for obj in followup:
-        obj['obs_type'] = 'followup'
-        obj['rank'] = RANK_INDEX[obj['priority']]
-        obj['nickname'] = strip_name(obj['name'])
+    for target in followup:
+        target['obs_type'] = 'followup'
+        target['rank'] = RANK_INDEX[target['priority']]
+        target['nickname'] = strip_name(target['name'])
 
     all_transients = classification + followup
 
@@ -336,35 +266,24 @@ if __name__ == '__main__':
     followup = sorted(followup, key=lambda x: x['rank'])
 
     # show the ordered targets
-    for obj in all_transients:
-        ob = ''
-        if 'ob' in obj.keys():
-            ob = f'{obj["ob"]["description"]}  {obj["ob"]["exp_time_s"]}s'
-        print(obj['name'], obj['priority'])
+    for target in all_transients:
+        print(target['name'], target['priority'])
 
     # target lists for staralt
     staralt_class = np.array([
-        np.array([o['name'], o['ra (sex)'], o['dec (sex)']])
-        for o in classification if o['priority'] != 'LOW'
+        np.array([target['name'], target['ra (sex)'], target['dec (sex)']])
+        for target in classification if target['priority'] != 'LOW'
     ])
 
     staralt_follow = np.array([
-        np.array([o['name'], o['ra (sex)'], o['dec (sex)']])
-        for o in followup
+        np.array([target['name'], target['ra (sex)'], target['dec (sex)']])
+        for target in followup
     ])
 
     np.savetxt('outputs/followup_list.txt', staralt_follow, fmt='%s')
     np.savetxt('outputs/classification_list.txt', staralt_class, fmt='%s')
 
     la_silla = Observer.at_site('La Silla Observatory')
-
-    # observability testing
-    # plot_wrap(make_schedule(
-    #     targets=classification,
-    #     site=la_silla,
-    #     date=DATE,
-    #     max_rank=5
-    # ), filename='graphs/test_schedule', show=False)
 
     # generate altitude plots
     plot_wrap(target_altitudes(
@@ -396,3 +315,7 @@ if __name__ == '__main__':
         site=la_silla,
         date=DATE
     ), filename=f'graphs/{DATE}_altitude_all')
+
+
+if __name__ == '__main__':
+    main()
